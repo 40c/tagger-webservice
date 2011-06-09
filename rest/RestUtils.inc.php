@@ -60,12 +60,10 @@ class RestUtils {
     }
 
     // Set the controller.
-    $controller = RestUtils::getController($response, $path_array);
-    $controller->process();
-    
+    $ret = RestUtils::getController($response, $path_array);
 
     // TODO. Right now we only return json.
-    $body = json_encode($controller->getProcessedResponse());
+    $body = json_encode($ret);
     RestUtils::sendResponse(200, $body, 'application/json');
   }
 
@@ -188,8 +186,9 @@ class RestUtils {
     }
     try {
       if ('tag' == $path_array[1]) {
-        include './tagger/controllers/TagController.inc.php';
-          return new TagController(
+        include './tagger/Tagger.php';
+        $tagger = Tagger::getTagger();
+        return $tagger->tagText(
             $response->getRequestVars('text'),
             $response->getRequestVars('ner'),
             $response->getRequestVars('disambiguate'),
