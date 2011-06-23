@@ -188,14 +188,30 @@ class RestUtils {
       if ('tag' == $path_array[1]) {
         include './tagger/Tagger.php';
         $tagger = Tagger::getTagger();
+        if ($response->getRequestVars('url')) {
+          $text = file_get_contents($response->getRequestVars('url'));
+        } else if ($response->getRequestVars('text')) {
+          $text = $response->getRequestVars('text');
+        } else {
+          die(RestUtils::sendResponse(500, 'Missing argument: text or url'));
+        }
+        
+        $configuration = $tagger->getConfiguration();
+
+        if(isset($configuration['vocab_names']) && !empty($configuration['vocab_names'])) {
+          $ner = implode('|', array_flip($configuration['vocab_names']));
+        } else {
+          die(RestUtils::sendResponse(500, 'No configured vocabs'));
+        }
+
         return $tagger->tagText(
-            $response->getRequestVars('text'),
-            $response->getRequestVars('ner'),
-            $response->getRequestVars('disambiguate'),
-            $response->getRequestVars('uris'),
-            $response->getRequestVars('unmatched'),
-            $response->getRequestVars('markup'),
-            $response->getRequestVars('nl2br')
+            $text,
+            $ner,
+            $response->getRequestVars('disambiguate') ? true : false,
+            $response->getRequestVars('uris') ? true : false,
+            $response->getRequestVars('unmatched') ? true : false,
+            $response->getRequestVars('markup') ? true : false,
+            $response->getRequestVars('nl2br') ? true : false
           );
       }
     }
