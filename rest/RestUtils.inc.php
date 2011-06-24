@@ -193,20 +193,18 @@ class RestUtils {
         } else if ($response->getRequestVars('text')) {
           $text = $response->getRequestVars('text');
         } else {
-          die(RestUtils::sendResponse(500, 'Missing argument: text or url'));
+          RestUtils::sendResponse(500, 'Missing argument: text or url');
         }
         
         $configuration = $tagger->getConfiguration();
 
-        if(isset($configuration['vocab_names']) && !empty($configuration['vocab_names'])) {
-          $ner = implode('|', array_flip($configuration['vocab_names']));
-        } else {
-          die(RestUtils::sendResponse(500, 'No configured vocabs'));
+        if (empty($configuration['vocab_names'])) {
+          RestUtils::sendResponse(500, 'No configured vocabs');
         }
 
         return $tagger->tagText(
             $text,
-            $ner,
+            $configuration['vocab_names'],
             $response->getRequestVars('disambiguate') ? true : false,
             $response->getRequestVars('uris') ? true : false,
             $response->getRequestVars('unmatched') ? true : false,
