@@ -186,6 +186,7 @@ class RestUtils {
     }
     try {
       if ('tag' == $path_array[1]) {
+
         include './tagger/Tagger.php';
         $tagger = Tagger::getTagger();
         if ($response->getRequestVars('url')) {
@@ -195,22 +196,25 @@ class RestUtils {
         } else {
           RestUtils::sendResponse(500, 'Missing argument: text or url');
         }
-        
-        $configuration = $tagger->getConfiguration();
 
-        if (empty($configuration['vocab_names'])) {
+        
+        $vocab_names = $tagger->getConfiguration('ner_vocab_names');
+
+        if (empty($vocab_names)) {
           RestUtils::sendResponse(500, 'No configured vocabs');
         }
 
         return $tagger->tagText(
             $text,
-            $configuration['vocab_names'],
+            TRUE, // Rate html
+            array(), // Rating configuration - is set in conf.php
+            array_keys($vocab_names), 
             $response->getRequestVars('disambiguate') ? true : false,
             $response->getRequestVars('uris') ? true : false,
             $response->getRequestVars('unmatched') ? true : false,
             $response->getRequestVars('markup') ? true : false,
             $response->getRequestVars('nl2br') ? true : false
-          );
+          )->getTags();
       }
     }
     catch (Exception $e) {
