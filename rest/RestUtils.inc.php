@@ -51,12 +51,14 @@ class RestUtils {
 
     $path = $response->getRequestVars();
     if (!isset($path['q'])) {
-      die(RestUtils::sendResponse(404));
+      RestUtils::sendResponse(200, file_get_contents('help.html'));
+      //die(RestUtils::sendResponse(404));
     }
 
     $path_array = explode('/', $path['q']);
     if (!isset($path_array[0])) {
-      die(RestUtils::sendResponse(404));
+      RestUtils::sendResponse(200, file_get_contents('help.html'));
+      //die(RestUtils::sendResponse(404));
     }
 
     // Set the controller.
@@ -189,8 +191,13 @@ class RestUtils {
 
         include './tagger/Tagger.php';
         $tagger = Tagger::getTagger();
+
         if ($response->getRequestVars('url')) {
-          $text = file_get_contents($response->getRequestVars('url'));
+          $url = $response->getRequestVars('url');
+          if (!preg_match('|^http://|', $url)) {
+            $url = 'http://' . $url;
+          }
+          $text = file_get_contents($url);
         } else if ($response->getRequestVars('text')) {
           $text = $response->getRequestVars('text');
         } else {
@@ -198,27 +205,94 @@ class RestUtils {
         }
 
         
-        $vocab_names = $tagger->getConfiguration('ner_vocab_names');
+        // FLAGS/OPTIONS
+        $options = array();
+        $option['named_entity'] = array();
+        $option['keyword'] = array();
 
-        if (empty($vocab_names)) {
-          RestUtils::sendResponse(500, 'No configured vocabs');
+        function is_enabled($parameter) {
+          $truthy = array('true','t','on','enable','1');
+          $parameter = strtolower($parameter);
+          
+          if ( in_array($parameter, $truthy) ) {
+            return TRUE;
+          }
+          else {
+            return FALSE;
+          }
         }
 
-        return $tagger->tagText(
-            $text,
-            TRUE, // Rate html
-            array(), // Rating configuration - is set in conf.php
-            array_keys($vocab_names), 
-            $response->getRequestVars('disambiguate') ? true : false,
-            $response->getRequestVars('uris') ? true : false,
-            $response->getRequestVars('unmatched') ? true : false,
-            $response->getRequestVars('markup') ? true : false,
-            $response->getRequestVars('nl2br') ? true : false
-          )->getTags();
+        function is_disabled($parameter) {
+          $falsy = array('false','f','off','disable','0');
+          $parameter = strtolower($parameter);
+
+          if ( in_array($parameter, $falsy) ) {
+            return TRUE;
+          }
+          else {
+            return FALSE;
+          }
+        }
+
+        if (is_enabled($response->getRequestVars('debug'))) {
+          $options['named_entity']['debug'] = TRUE;
+          $options['keyword']['debug'] = TRUE;
+        }
+
+        if ($response->getRequestVars('lang')) {
+          $options['lang'] = $response->getRequestVars('lang');
+        }
+        
+        if ( is_enabled($response->getRequestVars('disambiguate')) ) {
+          $options['named_entity']['disambiguate'] = TRUE;
+        }
+        else {
+          $options['named_entity']['disambiguate'] = FALSE;
+        }
+
+
+        if ($response->getRequestVars('k_vocab_ids')) {
+          $vocab_ids = str_replace(' ', '', $response->getRequestVars('k_vocab_ids'));
+          $vocab_ids = explode(',', $vocab_ids);
+          $options['keyword']['vocab_ids'] = 
+            array_intersect(Tagger::getConfiguration('keyword', 'vocab_ids'), $vocab_ids);
+        }
+        if ( is_disabled($response->getRequestVars('keyword')) ) {
+          $options['keyword']['vocab_ids'] = array();
+        }
+
+        if ($response->getRequestVars('n_vocab_ids')) {
+          $vocab_ids = str_replace(' ', '', $response->getRequestVars('n_vocab_ids'));
+          $vocab_ids = explode(',', $vocab_ids);
+          $options['named_entity']['vocab_ids'] = 
+            array_intersect(Tagger::getConfiguration('named_entity', 'vocab_ids'), $vocab_ids);
+        }
+        if ( is_disabled($response->getRequestVars('named_entity')) ) {
+          $options['named_entity']['vocab_ids'] = array();
+        }
+ 
+
+        if ( is_enabled($response->getRequestVars('linked_data')) ) {
+          $options['linked_data'] = TRUE;
+
+          $options['keyword']['public_fields'] =
+            Tagger::getConfiguration('keyword', 'public_fields')
+            + array('linked_data' => 'linked_data');
+          $options['named_entity']['public_fields'] =
+            Tagger::getConfiguration('named_entity', 'public_fields')
+            + array('linked_data' => 'linked_data');
+        }
+        else {
+          $options['linked_data'] = FALSE;
+        }
+
+        //var_dump($options);
+
+        return $tagger->tagText($text, $options)->getTags($options);
       }
     }
     catch (Exception $e) {
-      die(RestUtils::sendResponse(400));
+      die(RestUtils::sendResponse(500, $e->getMessage()));
     }
     die(RestUtils::sendResponse(404));
   }
